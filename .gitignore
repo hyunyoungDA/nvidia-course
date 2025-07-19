@@ -5,6 +5,9 @@
 
 ## data 파일
 data
+ml-100k
+Marvel+Graph
+Marvel+Names
 
 ## 제출 파일
 submission.csv
