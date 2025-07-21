@@ -11,24 +11,26 @@ load_dotenv(dotenv_path=".env")
 openai_api_key = os.getenv("OPENAI_API_KEY")
 
 # Streamlit 페이지 설정
+# Streamlit을 활용할 땐 set_page_config를 가장 먼저 위치시켜야 됨
 st.set_page_config(page_title="기타 작곡 챗봇", page_icon="🎵")
 st.title("🎵 가사와 분위기로 작곡하기")
 st.write("가사와 원하는 분위기를 입력하면 AI가 멜로디 아이디어와 코드 진행을 제안합니다!")
 
-if not openai_api_key:
-    st.error("❌ OpenAI API 키를 찾을 수 없습니다. .env 파일을 확인하세요.")
-    st.stop()
-else:
-    st.success("✅ OpenAI API 키 불러오기 성공 (테스트용)")
+# if not openai_api_key:
+#     st.error("OpenAI API 키를 찾을 수 없습니다. .env 파일을 확인하세요.")
+#     st.stop()
+# else:
+#     st.success("OpenAI API 키 불러오기 성공 (테스트용)")
 
-# LangChain 설정
+# model 설정
 llm = ChatOpenAI(model_name="gpt-4.1-mini-2025-04-14", 
                  openai_api_key=openai_api_key, 
                  temperature=0.7)
 
 # 프롬프트 템플릿 정의
+# PromptTemplate: 주로 단일 문자열 형태의 프롬프트 생성 
 prompt_template = PromptTemplate(
-    input_variables=["lyrics", "genre", "mood"],
+    input_variables=["lyrics", "genre", "mood"], # 입력 변수 지정 
     template="""
     당신은 전문 기타 작곡가입니다. 사용자가 제공한 가사, 장르, 분위기, 그리고 참고 악보(피아노 MIDI에서 추출)를 바탕으로 기타 중심의 멜로디 아이디어와 코드 진행을 제안하세요. 결과는 기타 연주자가 즉시 활용할 수 있도록 구체적이고 실용적이어야 합니다.
     - 가사: {lyrics} 
@@ -58,14 +60,16 @@ with st.form(key="compose_form"):
 
 # 작곡 결과 출력
 if submit_button:
+    # 작성된 문자열이 없는 경우 에러 처리 
     if lyrics.strip() == "":
         st.error("가사를 입력해주세요!")
     else:
-        with st.spinner("작곡 중..."):
+        with st.spinner("작곡 중..."): # Chatmodel이 답변 생성중일 때 표시 
             try:
-                result = chain.run(lyrics=lyrics, genre = genre, mood=mood)
+                # chain은 Runnable 인터페이스; chain을 invoke할 땐 입력 데이터의 타입이 딕셔너리 
+                result = chain.invoke({"lyrics":lyrics, "genre": genre, "mood": mood})
                 st.subheader("작곡 결과")
-                st.markdown(result)
+                st.markdown(result.content) # result의 content 부분만 출력 
             except Exception as e:
                 st.error(f"에러 발생: {str(e)}")
                 st.write("OpenAI API 키가 올바른지, 또는 인터넷 연결을 확인해주세요.")

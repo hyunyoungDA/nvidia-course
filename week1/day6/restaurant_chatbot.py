@@ -1,11 +1,11 @@
 import pandas as pd
 import os
 import folium
-from streamlit_folium import folium_static
-from streamlit_geolocation import streamlit_geolocation
-from langchain_community.document_loaders.csv_loader import CSVLoader
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from streamlit_folium import folium_static # 지도 표시 활용 
+from streamlit_geolocation import streamlit_geolocation 
+from langchain_community.document_loaders.csv_loader import CSVLoader # csv 파일 로딩 
+from langchain_core.prompts import PromptTemplate 
+from langchain_text_splitters import RecursiveCharacterTextSplitter 
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 import streamlit as st
@@ -22,11 +22,14 @@ st.set_page_config(page_title = "경기도 으뜸 맛집 추천 챗봇", page_ic
 st.title("🍴 경기도 맛집 추천 챗봇")
 st.write("지역이나 음식 종류를 입력하면 경기도 내 맛집을 추천해드립니다! (예: '고양시 한식', '광주시 오리구이')")
 
+# csv 파일 경로 설정 
 csv_file = "C:/nvidia_course/nvidia-course/week1/day6/restaurant_in_gyeonggi.csv"
 
 try:
+    # 만약 파일의 인코딩인 cp949인 경우 
+    # CSVLoader는 csv_args = {"delimiter", "quotechar","fieldnames" 등}를 활용할 수 있음 
     loader = CSVLoader(file_path=csv_file, encoding="cp949")
-    documents = loader.load()
+    documents = loader.load() 
 
     if not documents:
         st.error("CSV 파일이 비어 있거나 데이터를 로드할 수 없습니다.")
@@ -37,9 +40,9 @@ except FileNotFoundError:
     st.stop()
 
 except UnicodeDecodeError:
-    st.warning("CSV 파일을 'utf-8-sig'로 읽지 못했습니다. 'cp949'로 재시도합니다.")
+    st.warning("CSV 파일을 'utf-8-sig'로 읽지 못했습니다. 'utf-8'로 재시도합니다.")
     try:
-        loader = CSVLoader(file_path=csv_file, encoding="cp949")
+        loader = CSVLoader(file_path=csv_file, encoding="utf-8")
         documents = loader.load()
 
         if not documents:
@@ -47,7 +50,7 @@ except UnicodeDecodeError:
             st.stop()
 
     except Exception as e:
-        st.error(f"'cp949' 인코딩으로도 파일을 로드할 수 없습니다: {str(e)}")
+        st.error(f"'utf-8' 인코딩으로도 파일을 로드할 수 없습니다: {str(e)}")
         st.stop()
 
 except Exception as e:
@@ -56,6 +59,8 @@ except Exception as e:
 
 
 # 분할기 설정 
+# RecursiveCharacterTextSplitter는 단락 -> 문장 -> 단어 순으로 재귀적 분할
+# 이는 단락 단위가 의미적으로 가장 강하게 연관된 텍스트 조각으로 간주되기 때문
 text_splitter = RecursiveCharacterTextSplitter(
     #separator = "\n", # 기본 값은 "\n\n"
     chunk_size = 1000,
@@ -64,6 +69,7 @@ text_splitter = RecursiveCharacterTextSplitter(
     is_separator_regex=False # separator를 정규식이 아닌 일반 문자열로 처리 
 )
 
+# split_documents로 document 반환 
 split_docs = text_splitter.split_documents(documents)
 
 # DataFrame load
@@ -83,7 +89,7 @@ except Exception as e:
     st.stop()
 
 # 프롬프트 템플릿 정의
-prompt = ChatPromptTemplate.from_template("""
+prompt = PromptTemplate.from_template("""
 당신은 경기도 맛집 추천 챗봇입니다. 
 사용자가 요청한 지역이나 음식 종류에 맞는 맛집을 아래 데이터에서 찾아 추천해 주세요. 
 데이터를 기반으로 식당 이름, 대표 음식, 주소, 전화번호를 포함하고, 대표 음식의 종류(예: 한식, 중식)와 특징을 추론하여 자연스러운 대화 형식으로 응답하세요. 
@@ -105,15 +111,25 @@ prompt = ChatPromptTemplate.from_template("""
 """)
 
 
-
+# LangChain 체인 설정 
 chain = prompt | llm
-# 맛집 추천 함수
+
 def recommend_restaurant(user_input):
+    """맛집 추천 함수 
+    Args:
+        user_input (str): 사용자가 작성한 특정 지역과 음식 문자열 
+
+    Returns:
+        _type_: _description_
+    """
     filtered_docs = []
     filtered_rows = [] 
+    # 분할된 documents를 한 행씩 순회 
     for doc in split_docs:
         content = doc.page_content
         for _, row in df.iterrows():
+            # 사용자가 입력한 문자열에 해당 DataFrame의 시군명 또는 음식이 포함되어있다면 
+            # 추후에는 vectorstore 활용 
             if row["시군명"] in user_input or any(food.strip() in user_input for food in row["대표음식명"].split(",")):
                 filtered_docs.append(doc)
                 filtered_rows.append(row)
@@ -124,7 +140,9 @@ def recommend_restaurant(user_input):
         filtered_rows = df.to_dict('records')
     
     try:
+        # Runnable interface: chain기반 하나의 입력을 하나의 출력으로 반환 
         response = chain.invoke({"input": user_input, "context": filtered_docs})
+        # 만약 response가 content 속성을 가지고 있다면 응답이 올바르게 진행된 것. 
         if hasattr(response, "content"):
             return response.content, filtered_rows
         else:
@@ -136,6 +154,8 @@ def recommend_restaurant(user_input):
 def create_map(df_restaurants, my_location):
     # 경기도 중심 (수원시)으로 지도 초기화
     default_lat, default_lon = 37.2636, 127.0286  # 수원시 좌표
+    
+    # 만약 my_location, 즉 내 위치 정보가 존재하는 경우 
     if my_location and my_location[0] and my_location[1]:
         map_center = [my_location[0], my_location[1]]
     else:
