@@ -9,6 +9,7 @@ ml-100k
 Marvel+Graph
 Marvel+Names
 dataset
+*.db
 
 ## 제출 파일
 submission.csv
