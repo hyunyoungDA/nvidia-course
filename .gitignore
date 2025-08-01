@@ -16,3 +16,6 @@ submission.csv
 
 ## 시각화 파일
 *.png
+
+## 가상환경
+vllm-env
