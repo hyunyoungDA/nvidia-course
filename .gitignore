@@ -22,3 +22,6 @@ submission.csv
 
 ## 가상환경
 vllm-env
+
+## 모델
+lora_squad_results
